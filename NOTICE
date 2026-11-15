@@ -1,0 +1,11 @@
+TojirouPet
+Copyright 2026 TojirouPet contributors
+
+This project uses VPet-Simulator.Core by LorisYounger and contributors:
+https://github.com/LorisYounger/VPet
+VPet is licensed under the Apache License 2.0.
+
+The public source repository does not include game artwork, generated character
+animation packs, dialogue transcripts, or other third-party game assets. Those
+assets remain subject to their respective rights holders and must not be
+redistributed without permission.

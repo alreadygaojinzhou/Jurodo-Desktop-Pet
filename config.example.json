@@ -1,0 +1,6 @@
+{
+  "ApiBaseUrl": "https://api.deepseek.com/v1",
+  "ApiKey": "",
+  "Model": "deepseek-chat",
+  "Temperature": 0.9
+}

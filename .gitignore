@@ -1,0 +1,37 @@
+# Local secrets
+config.json
+**/config.json
+素材/
+
+# User data and logs
+state.json
+*.log
+snap_*.png
+
+# Build output
+**/bin/
+**/obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.pdb
+
+# Generated desktop-pet assets
+TojirouPet/PetMod/
+TojirouPet/CharacterData/
+.verify-build/
+
+# Published applications and archives
+斗次郎桌宠/
+*.zip
+
+# Local development notes and screenshots
+.workbuddy/
+交接文档.md
+_drag*.png
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini

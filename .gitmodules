@@ -1,0 +1,4 @@
+[submodule "VPet"]
+	path = VPet
+	url = https://github.com/LorisYounger/VPet.git
+	branch = main
