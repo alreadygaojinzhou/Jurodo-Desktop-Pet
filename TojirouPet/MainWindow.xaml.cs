@@ -182,6 +182,7 @@ namespace TojirouPet
                 _lastMode = _core.Save!.Mode;
                 _started = true;
                 _lastTick = DateTime.Now;
+                ApplyPersistentAppearance();
                 LoadingBox.Visibility = Visibility.Collapsed;
 
                 StartTimers();
@@ -296,6 +297,8 @@ namespace TojirouPet
                 await Task.Delay(500);
                 Log($"selftest dress graph={_pet.DisplayType.Name}");
                 Snap("04_dress");
+                await Task.Delay(8000);
+                Log($"selftest dress persistent={_pet.DisplayType.Name}, state={_state.Appearance}");
             }
 
             if (_profile.HasSit)
@@ -306,7 +309,7 @@ namespace TojirouPet
                     if (topItem is not MenuItem { Header: "换装" } dressSubmenu) continue;
                     foreach (var dressItem in dressSubmenu.Items)
                     {
-                        if (dressItem is not MenuItem { Header: "盘腿坐会儿" } sitItem) continue;
+                        if (dressItem is not MenuItem { Header: "盘腿坐（保持）" } sitItem) continue;
                         sitItem.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
                         break;
                     }
@@ -315,6 +318,8 @@ namespace TojirouPet
                 await Task.Delay(500);
                 Log($"selftest sit graph={_pet.DisplayType.Name}");
                 Snap("05_sit");
+                await Task.Delay(6500);
+                Log($"selftest sit persistent={_pet.DisplayType.Name}, state={_state.Appearance}");
             }
 
             OnBodyTouch();
@@ -460,7 +465,7 @@ namespace TojirouPet
             if (mode != _lastMode)
             {
                 _lastMode = mode;
-                _pet.DisplayToNomal();
+                RestorePersistentAppearance();
             }
             PushStats();
             UpdateTrayTip();
@@ -578,8 +583,9 @@ namespace TojirouPet
             }
             _lastAutoSay = DateTime.Now;
 
-            // 表情：优先用指定图，否则眨眼（说话感）
-            try { _pet.Display(graph ?? "blink", AnimatType.Single, () => _pet.DisplayToNomal()); } catch { }
+            // 有持续服装/姿势时不播放临时表情，避免一句话就破坏当前外观。
+            if (string.IsNullOrEmpty(_state.Appearance))
+                try { _pet.Display(graph ?? "blink", AnimatType.Single, RestorePersistentAppearance); } catch { }
 
             var bw = Math.Clamp(_petBox * 1.8 + 60, 170, 320);
             Bubble.MaxWidth = bw;
@@ -608,25 +614,72 @@ namespace TojirouPet
         private void Play(string graph)
         {
             if (!_started) return;
-            try { _pet.Display(graph, AnimatType.Single, () => _pet.DisplayToNomal()); } catch { }
+            try { _pet.Display(graph, AnimatType.Single, RestorePersistentAppearance); } catch { }
             var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3.5) };
-            t.Tick += (_, _) => { t.Stop(); try { _pet.DisplayToNomal(); } catch { } };
+            t.Tick += (_, _) => { t.Stop(); RestorePersistentAppearance(); };
             t.Start();
         }
 
         private void ShowOutfit(string graph, string[] lines)
         {
             if (!_started) return;
-            Log($"outfit show={graph}");
-            // 台词和服装必须使用同一个 graph；否则默认眨眼会立刻覆盖服装。
-            Say(_lines.Pick(lines), graph);
+            _state.Appearance = graph;
+            PersistState();
+            ApplyPersistentAppearance();
+            Log($"outfit persistent={graph}");
+            Say(_lines.Pick(lines));
         }
 
         private void SitDown()
         {
             if (!_started) return;
-            Log("action=sit");
-            Say(_lines.Pick(_lines.Sit), "sit");
+            _state.Appearance = "sit";
+            PersistState();
+            ApplyPersistentAppearance();
+            Log("sit persistent");
+            Say(_lines.Pick(_lines.Sit));
+        }
+
+        private void StandUp()
+        {
+            if (!_started) return;
+            _state.Appearance = "";
+            PersistState();
+            RestorePersistentAppearance();
+            Log("appearance default");
+            Say("……站直了。");
+        }
+
+        private void ApplyPersistentAppearance()
+        {
+            if (!_started) return;
+            RestorePersistentAppearance();
+            Log($"appearance={(_state.Appearance.Length == 0 ? "default" : _state.Appearance)}");
+        }
+
+        private void RestorePersistentAppearance()
+        {
+            if (!_started) return;
+            var appearance = _state.Appearance;
+            if (!string.IsNullOrEmpty(appearance))
+            {
+                bool supported = appearance == "sit"
+                    ? _profile.HasSit
+                    : _profile.Outfits.Any(x => x.Graph == appearance);
+                if (supported)
+                {
+                    try
+                    {
+                        _pet.Display(appearance, AnimatType.Single);
+                        return;
+                    }
+                    catch
+                    {
+                    }
+                }
+                _state.Appearance = "";
+            }
+            try { _pet.DisplayToNomal(); } catch { }
         }
 
         // ---------- 自动说话 ----------
@@ -739,15 +792,16 @@ namespace TojirouPet
             cm.Items.Add(Item("互动规则", OpenInteractionRules));
 
             var dress = new MenuItem { Header = "换装" };
+            dress.Items.Add(Item("默认站姿", StandUp));
+            if (_profile.Outfits.Count > 0)
+                dress.Items.Add(new Separator());
             foreach (var outfit in _profile.Outfits)
                 dress.Items.Add(Item(outfit.Label, () => ShowOutfit(outfit.Graph, _lines.Outfit(outfit.Graph))));
             if (_profile.HasSit)
             {
-                if (dress.Items.Count > 0) dress.Items.Add(new Separator());
-                dress.Items.Add(Item("盘腿坐会儿", SitDown));
+                dress.Items.Add(new Separator());
+                dress.Items.Add(Item("盘腿坐（保持）", SitDown));
             }
-            if (dress.Items.Count == 0)
-                dress.Items.Add(new MenuItem { Header = "这个角色没有额外动作", IsEnabled = false });
             cm.Items.Add(dress);
 
             cm.Items.Add(new Separator());
@@ -1023,7 +1077,7 @@ namespace TojirouPet
             if (Mouse.Captured == this)
                 Mouse.Capture(null);
 
-            try { _pet.DisplayToNomal(); } catch { }
+            RestorePersistentAppearance();
 
             if (_dragHadBubble)
             {

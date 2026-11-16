@@ -68,7 +68,7 @@
                     <TextBlock Style="{StaticResource RuleText}">
                         选择角色：切换任意已经制作好动画包的角色。<LineBreak />
                         和当前角色说话：打开 AI 对话。<LineBreak />
-                        换装：工装、西装、浴衣、祭典和盘腿坐。<LineBreak />
+                        换装：工装、西装、浴衣、祭典和盘腿坐；选择后会持续保持，直到再次切换。<LineBreak />
                         大小：180px / 270px（默认）/ 360px / 450px。<LineBreak />
                         开机自启动：可在这里随时开启或关闭。<LineBreak />
                         总在最前：切换是否盖在其他窗口上。<LineBreak />

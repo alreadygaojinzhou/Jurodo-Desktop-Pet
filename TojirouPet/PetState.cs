@@ -19,6 +19,7 @@ namespace TojirouPet
         public int ScaleVersion { get; set; } // 0 = 旧存档；保存时写入当前版本
         public bool TopMost { get; set; } = true;
         public bool AutoStart { get; set; } = true;
+        public string Appearance { get; set; } = "";
         public string SelectedCharacter { get; set; } = "tojirou";
         public Dictionary<string, PetCharacterState> CharacterStates { get; set; } = new();
         public double WindowLeft { get; set; } = -1;
@@ -95,6 +96,7 @@ namespace TojirouPet
                     Mood = Mood,
                     Affection = Affection,
                     Health = Health,
+                    Appearance = Appearance,
                     LastSeen = LastSeen
                 };
             }
@@ -111,6 +113,7 @@ namespace TojirouPet
                 Mood = Mood,
                 Affection = Affection,
                 Health = Health,
+                Appearance = Appearance,
                 LastSeen = now
             };
         }
@@ -128,6 +131,7 @@ namespace TojirouPet
             Mood = character.Mood;
             Affection = character.Affection;
             Health = character.Health;
+            Appearance = character.Appearance;
             LastSeen = character.LastSeen;
         }
 
@@ -149,6 +153,7 @@ namespace TojirouPet
         public double Mood { get; set; } = 70;
         public double Affection { get; set; } = 10;
         public double Health { get; set; } = 100;
+        public string Appearance { get; set; } = "";
         public DateTime LastSeen { get; set; } = DateTime.Now;
 
         public void ApplyDecay(DateTime now)
