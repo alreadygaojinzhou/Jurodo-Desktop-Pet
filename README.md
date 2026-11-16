@@ -16,7 +16,9 @@ Windows 多角色桌宠，使用 C# WPF 和
 - 四状态表情、呼吸动画、摸头和拖拽
 - 投喂、换装、盘腿和角色专属台词
 - OpenAI 兼容接口的 AI 对话
-- 根据角色资料和关键词从完整剧情库中检索相关上下文
+- 根据角色资料和关键词从完整剧情库中检索相关场景上下文
+- 按角色持久保存聊天记忆，并显示完整对话记录
+- 区分现实用户和游戏主人公，可配置现实用户资料与互动边界
 - Windows 开机自启动、总在最前、托盘运行和位置记忆
 
 ## 环境
@@ -59,6 +61,14 @@ dotnet publish TojirouPet/TojirouPet.csproj -c Release -p:Platform=x64 -o .\out
 ```
 
 不要把填写真实 Key 的 `config.json` 提交到 Git。
+
+与 AI 建立个人关系时，可以编辑：
+
+```text
+%LOCALAPPDATA%\TojirouPet\user-profile.json
+```
+
+该文件不会进入 Git。聊天记录保存在同目录的 `chat\<角色>.json`。
 
 ## 角色素材
 

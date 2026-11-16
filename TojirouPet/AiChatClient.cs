@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -16,13 +17,22 @@ namespace TojirouPet
     {
         private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(45) };
         private static List<StoryLine>? _story;
-        private readonly List<(string role, string content)> _history = new();
+        private readonly List<ChatMessage> _history = new();
         private CharacterProfile? _profile;
+        public IReadOnlyList<ChatMessage> History => _history.ToList();
 
         public void SetCharacter(CharacterProfile profile)
         {
             _profile = profile;
             _history.Clear();
+            _history.AddRange(ChatMemoryStore.Load(profile.Key));
+        }
+
+        public void ClearHistory()
+        {
+            _history.Clear();
+            if (_profile != null)
+                ChatMemoryStore.Clear(_profile.Key);
         }
 
         public async Task<string> AskAsync(string userText, double food, double mood, double affection)
@@ -34,16 +44,17 @@ namespace TojirouPet
 
             var url = cfg.ApiBaseUrl.TrimEnd('/') + "/chat/completions";
             var memory = BuildStoryContext(profile, userText);
+            var userProfile = UserProfile.Load();
             var messages = new JsonArray
             {
                 new JsonObject
                 {
                     ["role"] = "system",
-                    ["content"] = Persona.SystemPrompt(profile, food, mood, affection, memory)
+                    ["content"] = Persona.SystemPrompt(profile, food, mood, affection, memory, userProfile)
                 }
             };
-            foreach (var (role, content) in _history)
-                messages.Add(new JsonObject { ["role"] = role, ["content"] = content });
+            foreach (var message in _history.TakeLast(16))
+                messages.Add(new JsonObject { ["role"] = message.Role, ["content"] = message.Content });
             messages.Add(new JsonObject { ["role"] = "user", ["content"] = userText });
 
             var payload = new JsonObject
@@ -71,10 +82,9 @@ namespace TojirouPet
             if (string.IsNullOrWhiteSpace(text))
                 throw new InvalidOperationException("返回内容为空");
 
-            _history.Add(("user", userText));
-            _history.Add(("assistant", text));
-            while (_history.Count > 8)
-                _history.RemoveRange(0, 2);
+            _history.Add(new ChatMessage("user", userText));
+            _history.Add(new ChatMessage("assistant", text));
+            ChatMemoryStore.Save(profile.Key, _history);
 
             return text;
         }
@@ -90,7 +100,7 @@ namespace TojirouPet
                 return "剧情索引不可用；请只依据角色资料回应。";
 
             var matches = story
-                .Select(line =>
+                .Select((line, index) =>
                 {
                     int score = 0;
                     foreach (var term in terms)
@@ -100,20 +110,42 @@ namespace TojirouPet
                     }
                     if (string.Equals(line.Speaker, profile.Name, StringComparison.Ordinal))
                         score += 5;
-                    return (line, score);
+                    return (line, index, score);
                 })
                 .Where(x => x.score > 0)
                 .OrderByDescending(x => x.score)
-                .ThenByDescending(x => x.line.Chapter)
-                .Take(7)
-                .Select(x => x.line)
+                .Take(4)
                 .ToList();
 
             if (matches.Count == 0)
                 return "没有检索到直接相关的剧情片段。";
 
-            return string.Join("\n", matches.Select(x =>
-                $"- [{x.Speaker}｜{x.Chapter}] {Truncate(x.Text, 140)}"));
+            var indexes = new HashSet<int>();
+            foreach (var match in matches)
+            {
+                for (var i = Math.Max(0, match.index - 1); i <= Math.Min(story.Count - 1, match.index + 3); i++)
+                {
+                    if (story[i].Chapter == match.line.Chapter &&
+                        story[i].Scene == match.line.Scene)
+                        indexes.Add(i);
+                }
+            }
+
+            var builder = new StringBuilder();
+            string? lastHeading = null;
+            foreach (var index in indexes.Order())
+            {
+                var line = story[index];
+                var heading = $"{line.Chapter} · 场景 {line.Scene}";
+                if (heading != lastHeading)
+                {
+                    builder.AppendLine($"【{heading}】");
+                    lastHeading = heading;
+                }
+                builder.AppendLine($"- {line.Speaker}：{Truncate(line.Text, 180)}");
+                if (builder.Length > 2200) break;
+            }
+            return builder.ToString();
         }
 
         private static IEnumerable<string> QueryTerms(string text)
@@ -155,6 +187,9 @@ namespace TojirouPet
                         Chapter = root.TryGetProperty("chapter", out var chapter)
                             ? chapter.GetString()?.Trim() ?? ""
                             : "",
+                        Scene = root.TryGetProperty("scene_b", out var scene)
+                            ? scene.GetInt32().ToString()
+                            : "",
                         Text = text
                     });
                 }
@@ -171,6 +206,7 @@ namespace TojirouPet
         {
             public string Speaker { get; init; } = "";
             public string Chapter { get; init; } = "";
+            public string Scene { get; init; } = "";
             public string Text { get; init; } = "";
         }
     }

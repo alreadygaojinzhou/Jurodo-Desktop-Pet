@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -56,6 +57,15 @@ namespace TojirouPet
 
         public double PetZoom => Math.Round(_petBox / 500.0, 3);
         public string PetName => _profile?.Name ?? "桌宠";
+        public Rect PetScreenBounds
+        {
+            get
+            {
+                double left = Left + (Width - _petBox) / 2;
+                double top = Top + _bubbleExtra;
+                return new Rect(left, top, _petBox, _petBox);
+            }
+        }
 
         public MainWindow()
         {
@@ -309,7 +319,31 @@ namespace TojirouPet
             _rules?.Close();
             OpenChat();
             await Task.Delay(700);
-            Log($"selftest chat window visible={_chat?.IsVisible}");
+            if (_chat is { } chat)
+            {
+                var overlap = Rect.Intersect(
+                    new Rect(chat.Left, chat.Top, chat.ActualWidth, chat.ActualHeight),
+                    PetScreenBounds);
+                double overlapArea = overlap.IsEmpty ? 0 : overlap.Width * overlap.Height;
+                Log($"selftest chat window visible={chat.IsVisible}, " +
+                    $"placement=({chat.Left:F0},{chat.Top:F0}) " +
+                    $"petOverlap={overlapArea:F0}");
+
+                var oldLeft = Left;
+                var oldTop = Top;
+                var workArea = SystemParameters.WorkArea;
+                Left = workArea.Right - _petBox - 2;
+                Top = workArea.Bottom - _petBox - 2;
+                chat.PlaceNear(this);
+                await Task.Delay(120);
+                var edgeOverlap = Rect.Intersect(
+                    new Rect(chat.Left, chat.Top, chat.ActualWidth, chat.ActualHeight),
+                    PetScreenBounds);
+                double edgeArea = edgeOverlap.IsEmpty ? 0 : edgeOverlap.Width * edgeOverlap.Height;
+                Log($"selftest chat edge placement=({chat.Left:F0},{chat.Top:F0}) petOverlap={edgeArea:F0}");
+                Left = oldLeft;
+                Top = oldTop;
+            }
             var reply = await ChatAsync("你在工地上干嘛呢？");
             Log("selftest chat: " + (reply ?? "null"));
             await Task.Delay(600);
@@ -317,11 +351,15 @@ namespace TojirouPet
             Log($"selftest state: food={_state.Food:F1} mood={_state.Mood:F1} aff={_state.Affection:F1} mode={_core.Save!.Mode}");
 
             var originalCharacter = _profile.Key;
+            var characterDelay = int.TryParse(
+                Environment.GetEnvironmentVariable("TOJIROU_CHARTEST_DELAY_MS"), out var configuredDelay)
+                ? Math.Clamp(configuredDelay, 100, 10000)
+                : 250;
             foreach (var character in _catalog.Characters)
             {
                 if (character.Key == originalCharacter) continue;
                 await SwitchCharacterAsync(character.Key);
-                await Task.Delay(250);
+                await Task.Delay(characterDelay);
                 Log($"selftest character {character.Key}: started={_started}, graph={_pet.DisplayType.Name}");
                 if (character.Key == "bunji") Snap("08_bunji");
             }
@@ -544,9 +582,11 @@ namespace TojirouPet
             var bw = Math.Clamp(_petBox * 1.8 + 60, 170, 320);
             Bubble.MaxWidth = bw;
             BubbleText.Text = text;
+            // Collapsed elements report a DesiredSize of zero; show before measuring
+            // so the window expands by the real bubble height instead of overlapping the pet.
+            Bubble.Visibility = Visibility.Visible;
             Bubble.Measure(new Size(bw, double.PositiveInfinity));
             ExpandForBubble(bw, Bubble.DesiredSize.Height);
-            Bubble.Visibility = Visibility.Visible;
 
             if (_bubbleTimer == null)
             {
@@ -621,6 +661,13 @@ namespace TojirouPet
                 Say(_lines.Pick(_lines.ChatError));
                 return null;
             }
+        }
+
+        public IReadOnlyList<ChatMessage> GetChatHistory() => _ai.History;
+
+        public void ClearChatHistory()
+        {
+            _ai.ClearHistory();
         }
 
         public void OpenChat()
