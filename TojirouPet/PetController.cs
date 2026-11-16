@@ -35,7 +35,9 @@ namespace TojirouPet
 
         public bool CheckPosition() => false;
 
-        public bool EnableFunction => true;
+        // Core 的摸头/摸身体会自行扣体力、加心情并弹出“体力/心情”标签。
+        // 本项目由 MainWindow 统一处理互动，因此关闭 Core 的这组数值功能。
+        public bool EnableFunction => false;
 
         public int InteractionCycle => 200;
 

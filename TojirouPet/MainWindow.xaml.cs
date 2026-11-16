@@ -50,6 +50,7 @@ namespace TojirouPet
         private bool _dragArmed;
         private bool _dragging;
         private DateTime _dragStartTime;
+        private DispatcherTimer? _dragAppearanceTimer;
         private Point _dragStartCursor;
         private Point _dragStartWindow;
         private bool _dragHadBubble;
@@ -235,6 +236,7 @@ namespace TojirouPet
         {
             await Task.Delay(1500);
             Log($"selftest: window={Width:F0}x{Height:F0}, petBox={_petBox:F0}, zoom={PetZoom}, pos=({Left:F0},{Top:F0})");
+            Log($"selftest core interaction functions={_ctrl.EnableFunction}");
             Snap("01_idle");
 
             // 实际触发“大小”菜单项，防止只验证属性而漏掉菜单接线问题。
@@ -299,6 +301,16 @@ namespace TojirouPet
                 Snap("04_dress");
                 await Task.Delay(8000);
                 Log($"selftest dress persistent={_pet.DisplayType.Name}, state={_state.Appearance}");
+                ShowDragPose();
+                Log($"selftest dress duringDrag={_pet.DisplayType.Name}");
+                _dragging = true;
+                StartDragAppearanceGuard();
+                try { _pet.Display("surprise", AnimatType.Single); } catch { }
+                await Task.Delay(400);
+                Log($"selftest dress guard={_pet.DisplayType.Name}");
+                _dragging = false;
+                _dragAppearanceTimer?.Stop();
+                RestorePersistentAppearance();
             }
 
             if (_profile.HasSit)
@@ -320,6 +332,8 @@ namespace TojirouPet
                 Snap("05_sit");
                 await Task.Delay(6500);
                 Log($"selftest sit persistent={_pet.DisplayType.Name}, state={_state.Appearance}");
+                ShowDragPose();
+                Log($"selftest sit duringDrag={_pet.DisplayType.Name}");
             }
 
             OnBodyTouch();
@@ -670,8 +684,14 @@ namespace TojirouPet
                 {
                     try
                     {
-                        _pet.Display(appearance, AnimatType.Single);
-                        return;
+                        var graph = _core.Graph?.FindGraph(
+                            appearance, AnimatType.Single, _core.Save!.Mode);
+                        if (graph != null)
+                        {
+                            graph.IsLoop = true;
+                            _pet.Display(graph);
+                            return;
+                        }
                     }
                     catch
                     {
@@ -1003,13 +1023,45 @@ namespace TojirouPet
                 _bubbleTimer?.Stop();
                 _pet.isPress = false; // 取消 Core 的延迟点击/长按动作
                 Mouse.Capture(this, CaptureMode.SubTree);
-                try { _pet.Display("surprise", AnimatType.Single); } catch { }
+                ShowDragPose();
+                StartDragAppearanceGuard();
                 Log("drag begin");
             }
 
             Left = _dragStartWindow.X + cursor.X - _dragStartCursor.X;
             Top = _dragStartWindow.Y + cursor.Y - _dragStartCursor.Y;
+            EnsureDragAppearance();
             e.Handled = true;
+        }
+
+        private void ShowDragPose()
+        {
+            if (string.IsNullOrEmpty(_state.Appearance))
+                try { _pet.Display("surprise", AnimatType.Single); } catch { }
+        }
+
+        private void StartDragAppearanceGuard()
+        {
+            if (string.IsNullOrEmpty(_state.Appearance)) return;
+            if (_dragAppearanceTimer == null)
+            {
+                _dragAppearanceTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(250)
+                };
+                _dragAppearanceTimer.Tick += (_, _) => EnsureDragAppearance();
+            }
+            _dragAppearanceTimer.Start();
+        }
+
+        private void EnsureDragAppearance()
+        {
+            if (!_dragging || string.IsNullOrEmpty(_state.Appearance)) return;
+            var expected = _state.Appearance;
+            if (string.Equals(_pet.DisplayType.Name, expected, StringComparison.Ordinal))
+                return;
+            Log($"drag appearance restore: {_pet.DisplayType.Name} -> {expected}");
+            RestorePersistentAppearance();
         }
 
         private void Window_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -1074,6 +1126,7 @@ namespace TojirouPet
         private void FinishDrag()
         {
             _dragging = false;
+            _dragAppearanceTimer?.Stop();
             if (Mouse.Captured == this)
                 Mouse.Capture(null);
 
