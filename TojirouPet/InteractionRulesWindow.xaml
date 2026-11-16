@@ -38,10 +38,11 @@
                     <TextBlock Text="直接摸摸他" Foreground="#FFFFB36B" FontSize="15"
                                FontWeight="SemiBold" Margin="0,0,0,8" />
                     <TextBlock Style="{StaticResource RuleText}">
-                        左键点头部：摸头，好感 +1.2、心情 +2.5。<LineBreak />
-                        左键点身体：摸身体，好感 +0.5、心情 +1。<LineBreak />
+                        左键点击：角色随机说一句，不改变饱食和心情。<LineBreak />
+                        左键点头部：摸头，好感 +1.2。<LineBreak />
+                        左键点身体：摸身体，好感 +0.5。<LineBreak />
                         按住移动：超过约 5px 就会跟手拖拽，松手放下。<LineBreak />
-                        右键或原地长按约 0.4 秒：打开桌宠菜单。
+                        右键或原地长按约 0.8 秒：打开桌宠菜单。
                     </TextBlock>
 
                     <TextBlock Text="投喂" Foreground="#FFFFB36B" FontSize="15"
@@ -56,6 +57,7 @@
                     <TextBlock Text="状态变化" Foreground="#FFFFB36B" FontSize="15"
                                FontWeight="SemiBold" Margin="0,18,0,8" />
                     <TextBlock Style="{StaticResource RuleText}">
+                        角色每隔约 3 分钟会主动说一句话。<LineBreak />
                         饱食约 14 小时见底，心情约 10 小时见底。<LineBreak />
                         饱食过低会催饭；饱食或心情长期过低会进入丧/呆状态。<LineBreak />
                         健康低于 40 时会显示生病状态。数值和位置会自动保存。

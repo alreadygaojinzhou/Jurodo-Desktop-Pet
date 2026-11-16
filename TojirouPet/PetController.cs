@@ -25,7 +25,7 @@ namespace TojirouPet
 
         public double ZoomRatio => _win.PetZoom;
 
-        public int PressLength => 400;
+        public int PressLength => 800;
 
         public void ShowPanel() => _win.ShowPetMenu();
 

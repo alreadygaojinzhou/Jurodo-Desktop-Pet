@@ -45,10 +45,11 @@ namespace TojirouPet
 
         private double _petBox = 500 * PetState.DefaultScale;   // 宠物显示区域的边长（px）
         private double _bubbleExtra;          // 说话时窗口向上临时扩展的高度
-        private const double DragStartDistance = 5;
+        private const double DragStartDistance = 10;
 
         private bool _dragArmed;
         private bool _dragging;
+        private DateTime _dragStartTime;
         private Point _dragStartCursor;
         private Point _dragStartWindow;
         private bool _dragHadBubble;
@@ -254,13 +255,21 @@ namespace TojirouPet
             ApplyScale(initialScale);
             await Task.Delay(150);
 
+            var clickMood = _state.Mood;
+            OnPetClicked();
+            await Task.Delay(120);
+            Log($"selftest click moodDelta={_state.Mood - clickMood:F3}");
+            Log($"selftest idle interval minutes={_idleTimer?.Interval.TotalMinutes:F1}");
+
             var l0 = Left; var t0 = Top;
             MoveBy(80 * PetZoom, -40 * PetZoom);
             await Task.Delay(200);
             Log($"selftest moveBy: dx={Left - l0:F1} dy={Top - t0:F1}");
             MoveBy(-80 * PetZoom, 40 * PetZoom);
+            var headMood = _state.Mood;
             OnHeadTouch();
             await Task.Delay(900);
+            Log($"selftest head moodDelta={_state.Mood - headMood:F3}");
             Snap("02_head");
             Feed("meat");
             await Task.Delay(1200);
@@ -414,7 +423,7 @@ namespace TojirouPet
             _saveTimer.Tick += (_, _) => PersistState();
             _saveTimer.Start();
 
-            _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+            _idleTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(3) };
             _idleTimer.Tick += OnIdleTick;
             _idleTimer.Start();
         }
@@ -488,21 +497,16 @@ namespace TojirouPet
         private void OnPetClicked()
         {
             if (!_started) return;
-            if (DateTime.Now - _lastAutoSay < TimeSpan.FromSeconds(4)) return;
             _lastAutoSay = DateTime.Now;
             Say(_lines.Pick(_state.Mood < 25 ? _lines.LowMood : _lines.Click));
-            _state.Mood = Clamp(_state.Mood + 0.3, 0, 100);
-            PushStats();
         }
 
         private void OnHeadTouch()
         {
             if (!_started) return;
-            if (DateTime.Now - _lastHead < TimeSpan.FromSeconds(3)) return;
             _lastHead = DateTime.Now;
 
             _state.Affection = Clamp(_state.Affection + 1.2, 0, 100);
-            _state.Mood = Clamp(_state.Mood + 2.5, 0, 100);
             PushStats();
 
             bool close = _state.Affection >= 35;
@@ -513,11 +517,9 @@ namespace TojirouPet
         private void OnBodyTouch()
         {
             if (!_started) return;
-            if (DateTime.Now - _lastBody < TimeSpan.FromSeconds(4)) return;
             _lastBody = DateTime.Now;
 
             _state.Affection = Clamp(_state.Affection + 0.5, 0, 100);
-            _state.Mood = Clamp(_state.Mood + 1, 0, 100);
             PushStats();
             Say(_lines.Pick(_lines.Body), "angryface");
         }
@@ -632,8 +634,6 @@ namespace TojirouPet
         private void OnIdleTick(object? sender, EventArgs e)
         {
             if (!_started) return;
-            if (DateTime.Now - _lastAutoSay < TimeSpan.FromMinutes(2)) return;
-            if (Random.Shared.NextDouble() > 0.35) return;
 
             if (DateTime.Now.Hour >= 0 && DateTime.Now.Hour < 5 && Random.Shared.NextDouble() < 0.5)
                 Say(_lines.Pick(_lines.LateNight));
@@ -926,6 +926,7 @@ namespace TojirouPet
             if (!_started || e.ChangedButton != MouseButton.Left) return;
 
             _dragArmed = true;
+            _dragStartTime = DateTime.Now;
             _dragStartCursor = GetCursorScreenDip(e);
             _dragStartWindow = new Point(Left, Top);
         }
@@ -962,11 +963,52 @@ namespace TojirouPet
             if (!_dragArmed) return;
 
             _dragArmed = false;
-            if (!_dragging) return;
+            if (_dragging)
+            {
+                FinishDrag();
+                e.Handled = true;
+                return;
+            }
 
-            FinishDrag();
+            _pet.isPress = false;
+            HandleDirectClick(e);
             e.Handled = true;
         }
+
+        private void HandleDirectClick(MouseButtonEventArgs e)
+        {
+            if (DateTime.Now - _dragStartTime > TimeSpan.FromMilliseconds(750))
+            {
+                Log("click ignored: long press");
+                return;
+            }
+
+            var point = e.GetPosition(_pet.MainGrid);
+            var config = _core.Graph!.GraphConfig;
+            var foodBefore = _state.Food;
+            var moodBefore = _state.Mood;
+            if (Contains(point, config.TouchHeadLocate, config.TouchHeadSize))
+            {
+                Log("direct click: head");
+                OnHeadTouch();
+            }
+            else if (Contains(point, config.TouchBodyLocate, config.TouchBodySize))
+            {
+                Log("direct click: body");
+                OnBodyTouch();
+            }
+            else
+            {
+                Log("direct click: generic");
+                OnPetClicked();
+            }
+            Log($"direct click status foodDelta={_state.Food - foodBefore:F3} " +
+                $"moodDelta={_state.Mood - moodBefore:F3}");
+        }
+
+        private static bool Contains(Point point, Point locate, Size size) =>
+            point.X >= locate.X && point.Y >= locate.Y &&
+            point.X <= locate.X + size.Width && point.Y <= locate.Y + size.Height;
 
         private void Window_LostMouseCapture(object sender, MouseEventArgs e)
         {
